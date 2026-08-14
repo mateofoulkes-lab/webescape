@@ -10,65 +10,32 @@
   </script>
 </head>
 <body>
-<header class="topbar">
-  <div><strong>WEBESCAPE</strong><span>Parametric Room Lab</span></div>
-  <div class="top-actions">
-    <div class="transform-toolbar">
-      <span class="shortcut-hint">G mover · R rotar · S escalar · X/Y/Z eje · Shift+eje excluir</span>
-      <button id="gizmoToggle" class="ghost toggle-off" title="Mostrar/ocultar gadget visual">Gizmo: OFF</button>
-    </div>
-    <button id="newPlanBtn" class="ghost">Nuevo plano</button>
-    <button id="demoBtn" class="ghost">Demo simple</button>
-    <button id="hotelDemoBtn" class="ghost">🏨 Demo hotel</button>
-  </div>
-</header>
+<header class="topbar"><div><strong>WEBESCAPE</strong><span>Parametric Room Lab</span></div><div class="top-actions"><button id="newPlanBtn" class="ghost">Nuevo plano</button><button id="demoBtn" class="ghost">Demo simple</button><button id="hotelDemoBtn" class="ghost">🏨 Demo hotel</button></div></header>
 <main class="workspace">
   <aside class="left-panel panel">
-    <section>
-      <h2>Construcción</h2>
-      <button id="wallToolBtn" class="tool active">⌁ Pared / polígono <kbd>W</kbd></button>
-      <button id="rectToolBtn" class="tool">▭ Habitación rectangular <kbd>B</kbd></button>
-      <button id="selectToolBtn" class="tool">↖ Seleccionar <kbd>V</kbd></button>
-    </section>
+    <section><h2>Construcción</h2><button id="wallToolBtn" class="tool active">▱ Dibujar paredes <kbd>W</kbd></button><button id="selectToolBtn" class="tool">↖ Seleccionar <kbd>V</kbd></button></section>
     <section><h2>Plano</h2>
       <label>Altura pared nueva<div class="unit-input"><input id="defaultHeight" type="number" min="0.5" max="8" step="0.1" value="2.6"><span>m</span></div></label>
       <label>Espesor pared<div class="unit-input"><input id="wallThickness" type="number" min="0.05" max="1" step="0.01" value="0.15"><span>m</span></div></label>
       <label>Grilla<select id="gridSize"><option value="0.1">10 cm</option><option value="0.25" selected>25 cm</option><option value="0.5">50 cm</option><option value="1">1 m</option></select></label>
-      <label class="checkline"><input id="angleSnap" type="checkbox" checked> Snap angular 45°</label>
     </section>
     <section class="library-section"><div class="library-head"><h2>Biblioteca</h2><button id="refreshObjectsBtn" class="mini">↻</button></div><input id="objectSearch" class="search" placeholder="Buscar objeto…"><div id="objectLibrary" class="object-library"></div></section>
-    <section class="tips"><h2>Controles</h2><p><b>W</b> pared/polígono · cerralo tocando el primer punto.</p><p><b>B</b> rectángulo: dos esquinas opuestas.</p><p><b>G/R/S</b> transforma como Blender. <b>X/Y/Z</b> restringe; <b>Shift+eje</b> excluye.</p><p><b>Clic/Enter</b> confirma · <b>Esc</b> cancela · <b>Delete</b> elimina.</p></section>
+    <section class="tips"><h2>Controles</h2><p><b>Clic</b> dibuja paredes o selecciona.</p><p><b>Esc</b> termina cadena · <b>Delete</b> elimina.</p><p>Los objetos nuevos aparecen cerca del centro y se pueden mover desde el inspector.</p></section>
   </aside>
 
   <section class="views">
-    <div class="view-card plan-card"><div class="view-title"><span>PLANO 2D</span><span id="planStatus">Pared / polígono</span></div><canvas id="planCanvas"></canvas><div class="scale-note">Cápsula humana = 1,75 m · contornos cerrados = superficies</div></div>
-    <div class="view-card three-card"><div class="view-title"><span>VISTA 3D</span><span id="transformStatus">seleccioná un objeto · G/R/S para transformar</span></div><div id="threeViewport"></div></div>
+    <div class="view-card plan-card"><div class="view-title"><span>PLANO 2D</span><span id="planStatus">Dibujar paredes</span></div><canvas id="planCanvas"></canvas><div class="scale-note">Cápsula humana = 1,75 m</div></div>
+    <div class="view-card three-card"><div class="view-title"><span>VISTA 3D</span><span>arrastrar para orbitar · rueda para zoom</span></div><div id="threeViewport"></div></div>
   </section>
 
   <aside class="right-panel panel">
     <section><h2>Inspector</h2>
-      <div id="emptyInspector" class="empty-state">Seleccioná una pared, objeto o superficie.</div>
+      <div id="emptyInspector" class="empty-state">Seleccioná una pared u objeto en el plano.</div>
       <div id="wallInspector" hidden><div class="object-title">Pared <span id="wallNumber"></span></div><label>Largo<div class="readonly-value"><span id="wallLength">0.00</span> m</div></label><label>Altura<div class="unit-input"><input id="selectedHeight" type="number" min="0.5" max="8" step="0.1"><span>m</span></div></label><label>Espesor<div class="unit-input"><input id="selectedThickness" type="number" min="0.05" max="1" step="0.01"><span>m</span></div></label><button id="deleteWallBtn" class="danger">Eliminar pared</button></div>
-      <div id="objectInspector" hidden>
-        <div class="object-title" id="objectTitle">Objeto</div>
-        <h2 class="subhead">Posición</h2><div class="triple"><label>X<input id="objX" type="number" step="0.1"></label><label>Y<input id="objY" type="number" step="0.1"></label><label>Z<input id="objZ" type="number" step="0.1"></label></div>
-        <h2 class="subhead">Rotación</h2><div class="triple"><label>X°<input id="objRX" type="number" step="5"></label><label>Y°<input id="objRY" type="number" step="5"></label><label>Z°<input id="objRZ" type="number" step="5"></label></div>
-        <h2 class="subhead">Dimensiones</h2><div class="triple"><label>Ancho<input id="objW" type="number" min="0.02" step="0.05"></label><label>Alto<input id="objH" type="number" min="0.02" step="0.05"></label><label>Prof.<input id="objD" type="number" min="0.02" step="0.05"></label></div>
-        <button id="deleteObjectBtn" class="danger">Eliminar objeto</button>
-      </div>
-      <div id="surfaceInspector" hidden>
-        <div class="object-title">Superficie cerrada</div>
-        <label>Piso<select id="floorMaterial"></select></label>
-        <label>Techo<select id="ceilingMaterial"></select></label>
-        <label class="checkline"><input id="ceilingEnabled" type="checkbox" checked> Mostrar techo</label>
-        <label>Altura de techo<div class="unit-input"><input id="surfaceHeight" type="number" min="0.5" max="8" step="0.1" value="2.6"><span>m</span></div></label>
-        <label class="upload-label">Textura propia<input id="customTexture" type="file" accept="image/*"></label>
-        <small class="muted">La textura cargada se agrega a la biblioteca de esta sesión para piso y techo.</small>
-        <button id="deleteSurfaceBtn" class="danger">Eliminar superficie</button>
-      </div>
+      <div id="objectInspector" hidden><div class="object-title" id="objectTitle">Objeto</div><div class="triple"><label>X<input id="objX" type="number" step="0.1"></label><label>Z<input id="objZ" type="number" step="0.1"></label><label>Rot°<input id="objRot" type="number" step="5"></label></div><h2 class="subhead">Dimensiones</h2><div class="triple"><label>Ancho<input id="objW" type="number" min="0.02" step="0.05"></label><label>Alto<input id="objH" type="number" min="0.02" step="0.05"></label><label>Prof.<input id="objD" type="number" min="0.02" step="0.05"></label></div><button id="deleteObjectBtn" class="danger">Eliminar objeto</button></div>
     </section>
-    <section><h2>Escena</h2><div class="stat"><span>Paredes</span><b id="wallCount">0</b></div><div class="stat"><span>Superficies</span><b id="surfaceCount">0</b></div><div class="stat"><span>Objetos</span><b id="objectCount">1</b></div><div class="scene-item human">◉ Humano referencia <small>1,75 m</small></div></section>
-    <section class="coming"><h2>Materiales incluidos</h2><p>Madera · baldosa · alfombra · hormigón · mármol · blanco · oscuro + textura propia.</p></section>
+    <section><h2>Escena</h2><div class="stat"><span>Paredes</span><b id="wallCount">0</b></div><div class="stat"><span>Objetos</span><b id="objectCount">1</b></div><div class="scene-item human">◉ Humano referencia <small>1,75 m</small></div></section>
+    <section class="coming"><h2>Catálogo</h2><p>Arquitectura · muebles · props · electrodomésticos · primitivas. Todo generado en geometría liviana.</p></section>
   </aside>
 </main>
 <script type="module" src="./src/app.js"></script>
