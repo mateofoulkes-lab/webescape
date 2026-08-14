@@ -12,12 +12,22 @@ function showFatal(error) {
 try {
   const appUrl = new URL('./app.js', import.meta.url);
   const libraryUrl = new URL('./object-library.js', import.meta.url).href;
-  const response = await fetch(appUrl.href + '?hotfix=041');
+  const response = await fetch(appUrl.href + '?hotfix=042');
   if (!response.ok) throw new Error(`No se pudo cargar app.js (${response.status})`);
   let source = await response.text();
 
-  // v0.4.1 hotfix: an accidental optional-chain token made the whole module fail to parse.
+  // Startup hotfixes for v0.4.2.
   source = source.replaceAll('selected?.38', 'selected ? .38');
+
+  // Three.js r168: TransformControls is itself the scene object.
+  // getHelper() only becomes the required API in r169+.
+  source = source.replace(
+    "const transformHelper = transform.getHelper(); scene.add(transformHelper); transformHelper.visible = false;",
+    "const transformHelper = transform; scene.add(transform); transform.visible = false;"
+  );
+
+  // Report the actual hotfixed build in the UI.
+  source = source.replace("const VERSION = '0.4.1';", "const VERSION = '0.4.2';");
 
   // A Blob module has no repository-relative base URL, so make this import absolute.
   source = source.replace("from './object-library.js'", `from '${libraryUrl}'`);
