@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebEscape — Parametric Room Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <strong>WEBESCAPE</strong>
+      <span>Parametric Room Lab</span>
+    </div>
+    <div class="top-actions">
+      <button id="newPlanBtn" class="ghost">Nuevo plano</button>
+      <button id="demoBtn" class="ghost">Cargar demo</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="left-panel panel">
+      <section>
+        <h2>Construcción</h2>
+        <button id="wallToolBtn" class="tool active">▱ Dibujar paredes <kbd>W</kbd></button>
+        <button id="selectToolBtn" class="tool">↖ Seleccionar <kbd>V</kbd></button>
+      </section>
+
+      <section>
+        <h2>Plano</h2>
+        <label>Altura pared nueva
+          <div class="unit-input"><input id="defaultHeight" type="number" min="0.5" max="8" step="0.1" value="2.6"><span>m</span></div>
+        </label>
+        <label>Espesor pared
+          <div class="unit-input"><input id="wallThickness" type="number" min="0.05" max="1" step="0.01" value="0.15"><span>m</span></div>
+        </label>
+        <label>Grilla
+          <select id="gridSize">
+            <option value="0.1">10 cm</option>
+            <option value="0.25" selected>25 cm</option>
+            <option value="0.5">50 cm</option>
+            <option value="1">1 m</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="tips">
+        <h2>Controles 2D</h2>
+        <p><b>Clic</b> inicia/termina pared.</p>
+        <p>Seguí clickeando para encadenar paredes.</p>
+        <p><b>Esc</b> termina la cadena.</p>
+        <p><b>Rueda</b> zoom · <b>botón central</b> desplaza.</p>
+      </section>
+    </aside>
+
+    <section class="views">
+      <div class="view-card plan-card">
+        <div class="view-title"><span>PLANO 2D</span><span id="planStatus">Dibujar paredes</span></div>
+        <canvas id="planCanvas"></canvas>
+        <div class="scale-note">La cápsula representa una persona de 1,75 m</div>
+      </div>
+      <div class="view-card three-card">
+        <div class="view-title"><span>VISTA 3D</span><span>arrastrar para orbitar · rueda para zoom</span></div>
+        <div id="threeViewport"></div>
+      </div>
+    </section>
+
+    <aside class="right-panel panel">
+      <section>
+        <h2>Inspector</h2>
+        <div id="emptyInspector" class="empty-state">Seleccioná una pared en el plano.</div>
+        <div id="wallInspector" hidden>
+          <div class="object-title">Pared <span id="wallNumber"></span></div>
+          <label>Largo
+            <div class="readonly-value"><span id="wallLength">0.00</span> m</div>
+          </label>
+          <label>Altura
+            <div class="unit-input"><input id="selectedHeight" type="number" min="0.5" max="8" step="0.1"><span>m</span></div>
+          </label>
+          <label>Espesor
+            <div class="unit-input"><input id="selectedThickness" type="number" min="0.05" max="1" step="0.01"><span>m</span></div>
+          </label>
+          <button id="deleteWallBtn" class="danger">Eliminar pared</button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Escena</h2>
+        <div class="stat"><span>Paredes</span><b id="wallCount">0</b></div>
+        <div class="stat"><span>Objetos</span><b>1</b></div>
+        <div class="scene-item human">◉ Humano referencia <small>1,75 m</small></div>
+      </section>
+
+      <section class="coming">
+        <h2>Siguiente</h2>
+        <p>Puertas · ventanas · muebles · objetos paramétricos · estados abierto/cerrado.</p>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
