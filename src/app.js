@@ -1,415 +1,57 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { catalog, createCatalogObject } from './object-library.js';
 
-const HUMAN_HEIGHT = 1.75;
-const state = {
-  walls: [],
-  selectedId: null,
-  tool: 'wall',
-  drawingStart: null,
-  hoverWorld: null,
-  grid: 0.25,
-  defaultHeight: 2.6,
-  defaultThickness: 0.15,
-  pan: { x: 0, y: 0 },
-  zoom: 70,
-  isPanning: false,
-  lastMouse: null,
-};
+const HUMAN_HEIGHT=1.75;
+const state={walls:[],objects:[],selected:null,tool:'wall',drawingStart:null,hoverWorld:null,grid:.25,defaultHeight:2.6,defaultThickness:.15,pan:{x:0,y:0},zoom:70,isPanning:false,lastMouse:null};
+const planCanvas=document.querySelector('#planCanvas'),ctx=planCanvas.getContext('2d'),viewport=document.querySelector('#threeViewport');
+const $=s=>document.querySelector(s);
+const ui={wallTool:$('#wallToolBtn'),selectTool:$('#selectToolBtn'),defaultHeight:$('#defaultHeight'),wallThickness:$('#wallThickness'),gridSize:$('#gridSize'),emptyInspector:$('#emptyInspector'),wallInspector:$('#wallInspector'),objectInspector:$('#objectInspector'),wallNumber:$('#wallNumber'),wallLength:$('#wallLength'),selectedHeight:$('#selectedHeight'),selectedThickness:$('#selectedThickness'),deleteWall:$('#deleteWallBtn'),wallCount:$('#wallCount'),objectCount:$('#objectCount'),planStatus:$('#planStatus'),demo:$('#demoBtn'),newPlan:$('#newPlanBtn'),library:$('#objectLibrary'),search:$('#objectSearch'),refresh:$('#refreshObjectsBtn'),objectTitle:$('#objectTitle'),objX:$('#objX'),objZ:$('#objZ'),objRot:$('#objRot'),objW:$('#objW'),objH:$('#objH'),objD:$('#objD'),deleteObject:$('#deleteObjectBtn')};
 
-const planCanvas = document.querySelector('#planCanvas');
-const ctx = planCanvas.getContext('2d');
-const viewport = document.querySelector('#threeViewport');
+// ---------- 3D ----------
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x10151b);scene.fog=new THREE.Fog(0x10151b,18,40);
+const camera=new THREE.PerspectiveCamera(48,1,.05,100);camera.position.set(7,6,8);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;viewport.appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,1.1,0);controls.enableDamping=true;controls.maxPolarAngle=Math.PI*.49;controls.minDistance=2;controls.maxDistance=30;
+scene.add(new THREE.HemisphereLight(0xcfe3ff,0x34312d,1.5));const sun=new THREE.DirectionalLight(0xffffff,2.1);sun.position.set(4,8,5);sun.castShadow=true;scene.add(sun);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(30,30),new THREE.MeshStandardMaterial({color:0x242a31,roughness:.95}));floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);scene.add(new THREE.GridHelper(30,120,0x495361,0x303842));
+const wallGroup=new THREE.Group(),objectGroup=new THREE.Group();scene.add(wallGroup,objectGroup);
+function createHuman(){const g=new THREE.Group(),r=.22,bh=HUMAN_HEIGHT-r*2,m=new THREE.MeshStandardMaterial({color:0x68b6ff,roughness:.45});const body=new THREE.Mesh(new THREE.CylinderGeometry(r,r,bh,18),m);body.position.y=r+bh/2;const top=new THREE.Mesh(new THREE.SphereGeometry(r,18,12),m);top.position.y=r+bh;const bottom=new THREE.Mesh(new THREE.SphereGeometry(r,18,10),m);bottom.scale.y=.55;bottom.position.y=r*.55;g.add(body,top,bottom);g.position.set(-1.2,0,-1.1);return g}scene.add(createHuman());
+function rebuild3D(){wallGroup.clear();objectGroup.clear();for(const w of state.walls){const dx=w.b.x-w.a.x,dz=w.b.y-w.a.y,len=Math.hypot(dx,dz);if(len<.001)continue;const mesh=new THREE.Mesh(new THREE.BoxGeometry(len,w.height,w.thickness),new THREE.MeshStandardMaterial({color:state.selected?.type==='wall'&&state.selected.id===w.id?0xf0b85a:0xc7cbd0,roughness:.78}));mesh.position.set((w.a.x+w.b.x)/2,w.height/2,(w.a.y+w.b.y)/2);mesh.rotation.y=-Math.atan2(dz,dx);mesh.castShadow=mesh.receiveShadow=true;wallGroup.add(mesh)}for(const o of state.objects){const def=catalog[o.defIndex];const g=createCatalogObject(def,o.params);g.position.set(o.x,0,o.z);g.rotation.y=o.rot;const selected=state.selected?.type==='object'&&state.selected.id===o.id;if(selected){const helper=new THREE.BoxHelper(g,0xffc766);g.add(helper)}objectGroup.add(g)}}
+function resize3D(){const w=viewport.clientWidth,h=viewport.clientHeight;renderer.setSize(w,h,false);camera.aspect=Math.max(.01,w/h);camera.updateProjectionMatrix()}function animate(){controls.update();resize3D();renderer.render(scene,camera);requestAnimationFrame(animate)}animate();
 
-const ui = {
-  wallTool: document.querySelector('#wallToolBtn'),
-  selectTool: document.querySelector('#selectToolBtn'),
-  defaultHeight: document.querySelector('#defaultHeight'),
-  wallThickness: document.querySelector('#wallThickness'),
-  gridSize: document.querySelector('#gridSize'),
-  emptyInspector: document.querySelector('#emptyInspector'),
-  wallInspector: document.querySelector('#wallInspector'),
-  wallNumber: document.querySelector('#wallNumber'),
-  wallLength: document.querySelector('#wallLength'),
-  selectedHeight: document.querySelector('#selectedHeight'),
-  selectedThickness: document.querySelector('#selectedThickness'),
-  deleteWall: document.querySelector('#deleteWallBtn'),
-  wallCount: document.querySelector('#wallCount'),
-  planStatus: document.querySelector('#planStatus'),
-  demo: document.querySelector('#demoBtn'),
-  newPlan: document.querySelector('#newPlanBtn'),
-};
-
-// ---------- THREE.JS ----------
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x10151b);
-scene.fog = new THREE.Fog(0x10151b, 18, 40);
-
-const camera = new THREE.PerspectiveCamera(48, 1, 0.05, 100);
-camera.position.set(7, 6, 8);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-viewport.appendChild(renderer.domElement);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 1.1, 0);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.maxPolarAngle = Math.PI * 0.49;
-controls.minDistance = 2;
-controls.maxDistance = 30;
-
-scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x34312d, 1.5));
-const sun = new THREE.DirectionalLight(0xffffff, 2.1);
-sun.position.set(4, 8, 5);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-scene.add(sun);
-
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(30, 30),
-  new THREE.MeshStandardMaterial({ color: 0x242a31, roughness: 0.95 })
-);
-floor.rotation.x = -Math.PI / 2;
-floor.receiveShadow = true;
-scene.add(floor);
-
-const grid3d = new THREE.GridHelper(30, 120, 0x495361, 0x303842);
-grid3d.position.y = 0.002;
-scene.add(grid3d);
-
-const wallGroup = new THREE.Group();
-scene.add(wallGroup);
-
-function createHumanCapsule() {
-  const group = new THREE.Group();
-  const radius = 0.22;
-  const bodyHeight = HUMAN_HEIGHT - radius * 2;
-  const material = new THREE.MeshStandardMaterial({ color: 0x68b6ff, roughness: 0.45, metalness: 0.05 });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, bodyHeight, 18), material);
-  body.position.y = radius + bodyHeight / 2;
-  const bottom = new THREE.Mesh(new THREE.SphereGeometry(radius, 18, 10), material);
-  bottom.scale.y = 0.55;
-  bottom.position.y = radius * 0.55;
-  const top = new THREE.Mesh(new THREE.SphereGeometry(radius, 18, 12), material);
-  top.position.y = radius + bodyHeight;
-  [body, bottom, top].forEach(m => { m.castShadow = true; group.add(m); });
-  group.position.set(-1.2, 0, -1.1);
-  return group;
-}
-scene.add(createHumanCapsule());
-
-function rebuild3D() {
-  wallGroup.clear();
-  for (const wall of state.walls) {
-    const dx = wall.b.x - wall.a.x;
-    const dz = wall.b.y - wall.a.y;
-    const length = Math.hypot(dx, dz);
-    if (length < 0.001) continue;
-    const geometry = new THREE.BoxGeometry(length, wall.height, wall.thickness);
-    const selected = wall.id === state.selectedId;
-    const material = new THREE.MeshStandardMaterial({
-      color: selected ? 0xf0b85a : 0xc7cbd0,
-      roughness: 0.78,
-      metalness: 0.0,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set((wall.a.x + wall.b.x) / 2, wall.height / 2, (wall.a.y + wall.b.y) / 2);
-    mesh.rotation.y = -Math.atan2(dz, dx);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.userData.wallId = wall.id;
-    wallGroup.add(mesh);
-  }
-}
-
-function resize3D() {
-  const w = viewport.clientWidth;
-  const h = viewport.clientHeight;
-  renderer.setSize(w, h, false);
-  camera.aspect = Math.max(0.01, w / h);
-  camera.updateProjectionMatrix();
-}
-
-function animate() {
-  controls.update();
-  resize3D();
-  renderer.render(scene, camera);
-  requestAnimationFrame(animate);
-}
-animate();
-
-// ---------- PLAN 2D ----------
-function resizeCanvas() {
-  const rect = planCanvas.getBoundingClientRect();
-  const dpr = Math.min(devicePixelRatio, 2);
-  const width = Math.round(rect.width * dpr);
-  const height = Math.round(rect.height * dpr);
-  if (planCanvas.width !== width || planCanvas.height !== height) {
-    planCanvas.width = width;
-    planCanvas.height = height;
-  }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-
-function worldToScreen(p) {
-  const rect = planCanvas.getBoundingClientRect();
-  return {
-    x: rect.width / 2 + state.pan.x + p.x * state.zoom,
-    y: rect.height / 2 + state.pan.y + p.y * state.zoom,
-  };
-}
-
-function screenToWorld(x, y) {
-  const rect = planCanvas.getBoundingClientRect();
-  return {
-    x: (x - rect.width / 2 - state.pan.x) / state.zoom,
-    y: (y - rect.height / 2 - state.pan.y) / state.zoom,
-  };
-}
-
-function snap(p) {
-  const g = state.grid;
-  return { x: Math.round(p.x / g) * g, y: Math.round(p.y / g) * g };
-}
-
-function drawGrid() {
-  const rect = planCanvas.getBoundingClientRect();
-  ctx.fillStyle = '#0d1116';
-  ctx.fillRect(0, 0, rect.width, rect.height);
-
-  const minor = state.grid * state.zoom;
-  const step = minor < 12 ? minor * Math.ceil(12 / minor) : minor;
-  const origin = worldToScreen({ x: 0, y: 0 });
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = '#202832';
-  ctx.beginPath();
-  let startX = ((origin.x % step) + step) % step;
-  for (let x = startX; x < rect.width; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, rect.height); }
-  let startY = ((origin.y % step) + step) % step;
-  for (let y = startY; y < rect.height; y += step) { ctx.moveTo(0, y); ctx.lineTo(rect.width, y); }
-  ctx.stroke();
-
-  ctx.strokeStyle = '#3b4653';
-  ctx.beginPath();
-  ctx.moveTo(0, origin.y); ctx.lineTo(rect.width, origin.y);
-  ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, rect.height);
-  ctx.stroke();
-}
-
-function drawWall2D(wall) {
-  const a = worldToScreen(wall.a);
-  const b = worldToScreen(wall.b);
-  const selected = wall.id === state.selectedId;
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = selected ? '#f0b85a' : '#d5dbe2';
-  ctx.lineWidth = Math.max(3, wall.thickness * state.zoom);
-  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-
-  ctx.fillStyle = selected ? '#ffd17f' : '#7f8c99';
-  for (const p of [a, b]) { ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx.fill(); }
-
-  if (selected) {
-    const length = wallLength(wall);
-    ctx.font = '11px system-ui';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffd17f';
-    ctx.fillText(`${length.toFixed(2)} m`, (a.x+b.x)/2, (a.y+b.y)/2 - 10);
-  }
-}
-
-function drawHuman2D() {
-  // Top-view human capsule footprint, located at the same X/Z as the 3D reference.
-  const center = worldToScreen({ x: -1.2, y: -1.1 });
-  const length = 0.48 * state.zoom;
-  const width = 0.28 * state.zoom;
-  ctx.save();
-  ctx.translate(center.x, center.y);
-  ctx.fillStyle = '#68b6ff';
-  ctx.strokeStyle = '#b9ddff';
-  ctx.lineWidth = 1.5;
-  const r = width / 2;
-  ctx.beginPath();
-  ctx.roundRect(-length/2, -width/2, length, width, r);
-  ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#a8d6ff';
-  ctx.font = '10px system-ui';
-  ctx.textAlign = 'center';
-  ctx.fillText('H 1,75 m', 0, -width/2 - 7);
-  ctx.restore();
-}
-
-function drawPreview() {
-  if (!state.drawingStart || !state.hoverWorld) return;
-  const a = worldToScreen(state.drawingStart);
-  const b = worldToScreen(state.hoverWorld);
-  ctx.strokeStyle = '#70b9ff';
-  ctx.setLineDash([7, 5]);
-  ctx.lineWidth = Math.max(2, state.defaultThickness * state.zoom);
-  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-  ctx.setLineDash([]);
-  const len = Math.hypot(state.hoverWorld.x-state.drawingStart.x,state.hoverWorld.y-state.drawingStart.y);
-  ctx.fillStyle='#9bd0ff';ctx.font='11px system-ui';ctx.textAlign='center';
-  ctx.fillText(`${len.toFixed(2)} m`,(a.x+b.x)/2,(a.y+b.y)/2-10);
-}
-
-function renderPlan() {
-  resizeCanvas();
-  drawGrid();
-  state.walls.forEach(drawWall2D);
-  drawPreview();
-  drawHuman2D();
-  requestAnimationFrame(renderPlan);
-}
-renderPlan();
-
-function pointerPosition(e) {
-  const r = planCanvas.getBoundingClientRect();
-  return { x: e.clientX-r.left, y: e.clientY-r.top };
-}
-
-function wallLength(w) { return Math.hypot(w.b.x-w.a.x,w.b.y-w.a.y); }
-
-function distancePointSegment(p, a, b) {
-  const vx=b.x-a.x, vy=b.y-a.y, wx=p.x-a.x, wy=p.y-a.y;
-  const len2=vx*vx+vy*vy;
-  if (!len2) return Math.hypot(wx,wy);
-  const t=Math.max(0,Math.min(1,(wx*vx+wy*vy)/len2));
-  return Math.hypot(p.x-(a.x+t*vx),p.y-(a.y+t*vy));
-}
-
-function pickWall(world) {
-  let best=null, d=Infinity;
-  for (const w of state.walls) {
-    const wd=distancePointSegment(world,w.a,w.b);
-    const tolerance=Math.max(w.thickness/2,7/state.zoom);
-    if (wd<tolerance && wd<d) { best=w;d=wd; }
-  }
-  return best;
-}
+// ---------- 2D ----------
+function resizeCanvas(){const r=planCanvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio,2),w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);if(planCanvas.width!==w||planCanvas.height!==h){planCanvas.width=w;planCanvas.height=h}ctx.setTransform(dpr,0,0,dpr,0,0)}
+function worldToScreen(p){const r=planCanvas.getBoundingClientRect();return{x:r.width/2+state.pan.x+p.x*state.zoom,y:r.height/2+state.pan.y+p.y*state.zoom}}
+function screenToWorld(x,y){const r=planCanvas.getBoundingClientRect();return{x:(x-r.width/2-state.pan.x)/state.zoom,y:(y-r.height/2-state.pan.y)/state.zoom}}
+function snap(p){const g=state.grid;return{x:Math.round(p.x/g)*g,y:Math.round(p.y/g)*g}}
+function drawGrid(){const r=planCanvas.getBoundingClientRect();ctx.fillStyle='#0d1116';ctx.fillRect(0,0,r.width,r.height);const minor=state.grid*state.zoom,step=minor<12?minor*Math.ceil(12/minor):minor,origin=worldToScreen({x:0,y:0});ctx.strokeStyle='#202832';ctx.lineWidth=1;ctx.beginPath();for(let x=((origin.x%step)+step)%step;x<r.width;x+=step){ctx.moveTo(x,0);ctx.lineTo(x,r.height)}for(let y=((origin.y%step)+step)%step;y<r.height;y+=step){ctx.moveTo(0,y);ctx.lineTo(r.width,y)}ctx.stroke();ctx.strokeStyle='#3b4653';ctx.beginPath();ctx.moveTo(0,origin.y);ctx.lineTo(r.width,origin.y);ctx.moveTo(origin.x,0);ctx.lineTo(origin.x,r.height);ctx.stroke()}
+function wallLength(w){return Math.hypot(w.b.x-w.a.x,w.b.y-w.a.y)}
+function drawWall(w){const a=worldToScreen(w.a),b=worldToScreen(w.b),sel=state.selected?.type==='wall'&&state.selected.id===w.id;ctx.lineCap='round';ctx.strokeStyle=sel?'#f0b85a':'#d5dbe2';ctx.lineWidth=Math.max(3,w.thickness*state.zoom);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();if(sel){ctx.fillStyle='#ffd17f';ctx.font='11px system-ui';ctx.textAlign='center';ctx.fillText(`${wallLength(w).toFixed(2)} m`,(a.x+b.x)/2,(a.y+b.y)/2-10)}}
+function drawObject(o){const def=catalog[o.defIndex],p=o.params,w=(p.w||.5)*state.zoom,d=(p.d||.5)*state.zoom,c=worldToScreen({x:o.x,y:o.z}),sel=state.selected?.type==='object'&&state.selected.id===o.id;ctx.save();ctx.translate(c.x,c.y);ctx.rotate(-o.rot);ctx.fillStyle=sel?'#b78947':def.category==='Primitivos'?'#51677a':'#475764';ctx.strokeStyle=sel?'#ffd17f':'#91a0ad';ctx.lineWidth=1.5;ctx.fillRect(-w/2,-d/2,w,d);ctx.strokeRect(-w/2,-d/2,w,d);ctx.restore();if(sel){ctx.fillStyle='#ffd17f';ctx.font='10px system-ui';ctx.textAlign='center';ctx.fillText(def.name,c.x,c.y-d/2-7)}}
+function drawHuman2D(){const c=worldToScreen({x:-1.2,y:-1.1});ctx.fillStyle='#68b6ff';ctx.beginPath();ctx.arc(c.x,c.y,.18*state.zoom,0,Math.PI*2);ctx.fill();ctx.fillStyle='#a8d6ff';ctx.font='10px system-ui';ctx.textAlign='center';ctx.fillText('H 1,75 m',c.x,c.y-.28*state.zoom)}
+function drawPreview(){if(!state.drawingStart||!state.hoverWorld)return;const a=worldToScreen(state.drawingStart),b=worldToScreen(state.hoverWorld);ctx.strokeStyle='#70b9ff';ctx.setLineDash([7,5]);ctx.lineWidth=Math.max(2,state.defaultThickness*state.zoom);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.setLineDash([])}
+function renderPlan(){resizeCanvas();drawGrid();state.walls.forEach(drawWall);state.objects.forEach(drawObject);drawPreview();drawHuman2D();requestAnimationFrame(renderPlan)}renderPlan();
+function pointerPosition(e){const r=planCanvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+function distancePointSegment(p,a,b){const vx=b.x-a.x,vy=b.y-a.y,wx=p.x-a.x,wy=p.y-a.y,l2=vx*vx+vy*vy;if(!l2)return Math.hypot(wx,wy);const t=Math.max(0,Math.min(1,(wx*vx+wy*vy)/l2));return Math.hypot(p.x-(a.x+t*vx),p.y-(a.y+t*vy))}
+function pick(world){for(let i=state.objects.length-1;i>=0;i--){const o=state.objects[i],p=o.params,dx=world.x-o.x,dz=world.y-o.z,c=Math.cos(o.rot),s=Math.sin(o.rot),lx=dx*c-dz*s,lz=dx*s+dz*c;if(Math.abs(lx)<=(p.w||.5)/2&&Math.abs(lz)<=(p.d||.5)/2)return{type:'object',id:o.id}}let best=null,d=Infinity;for(const w of state.walls){const wd=distancePointSegment(world,w.a,w.b),tol=Math.max(w.thickness/2,7/state.zoom);if(wd<tol&&wd<d){best=w;d=wd}}return best?{type:'wall',id:best.id}:null}
 
 planCanvas.addEventListener('contextmenu',e=>e.preventDefault());
-planCanvas.addEventListener('pointerdown', e => {
-  const pos=pointerPosition(e);
-  if (e.button===1 || e.button===2) {
-    state.isPanning=true; state.lastMouse=pos; planCanvas.setPointerCapture(e.pointerId); return;
-  }
-  if (e.button!==0) return;
-  const world=snap(screenToWorld(pos.x,pos.y));
+planCanvas.addEventListener('pointerdown',e=>{const pos=pointerPosition(e);if(e.button===1||e.button===2){state.isPanning=true;state.lastMouse=pos;return}if(e.button!==0)return;const raw=screenToWorld(pos.x,pos.y),world=snap(raw);if(state.tool==='select'){selectEntity(pick(raw));return}if(!state.drawingStart)state.drawingStart=world;else{const len=Math.hypot(world.x-state.drawingStart.x,world.y-state.drawingStart.y);if(len>=state.grid/2){state.walls.push({id:crypto.randomUUID(),a:{...state.drawingStart},b:{...world},height:state.defaultHeight,thickness:state.defaultThickness});state.drawingStart=world;syncScene()}}});
+planCanvas.addEventListener('pointermove',e=>{const pos=pointerPosition(e);if(state.isPanning&&state.lastMouse){state.pan.x+=pos.x-state.lastMouse.x;state.pan.y+=pos.y-state.lastMouse.y;state.lastMouse=pos;return}state.hoverWorld=snap(screenToWorld(pos.x,pos.y))});planCanvas.addEventListener('pointerup',()=>{state.isPanning=false;state.lastMouse=null});planCanvas.addEventListener('wheel',e=>{e.preventDefault();state.zoom=Math.max(25,Math.min(220,state.zoom*(e.deltaY<0?1.12:.89)))},{passive:false});
 
-  if (state.tool==='select') {
-    const hit=pickWall(screenToWorld(pos.x,pos.y));
-    selectWall(hit?.id ?? null);
-    return;
-  }
+// ---------- Catalog ----------
+function renderLibrary(filter=''){ui.library.innerHTML='';const cats=[...new Set(catalog.map(x=>x.category))];for(const cat of cats){const defs=catalog.map((d,i)=>({...d,i})).filter(d=>d.category===cat&&d.name.toLowerCase().includes(filter.toLowerCase()));if(!defs.length)continue;const title=document.createElement('div');title.className='lib-category';title.textContent=cat;const grid=document.createElement('div');grid.className='lib-grid';for(const d of defs){const b=document.createElement('button');b.className='lib-item'+(cat==='Primitivos'?' primitive':'');b.textContent=d.name;b.title='Agregar '+d.name;b.onclick=()=>addObject(d.i);grid.appendChild(b)}ui.library.append(title,grid)}}
+function addObject(defIndex){const def=catalog[defIndex],n=state.objects.length,angle=n*1.7,r=.25*Math.sqrt(n);state.objects.push({id:crypto.randomUUID(),defIndex,x:Math.cos(angle)*r,z:Math.sin(angle)*r,rot:0,params:{...def.defaults}});setTool('select');selectEntity({type:'object',id:state.objects.at(-1).id});syncScene()}
+ui.search.addEventListener('input',()=>renderLibrary(ui.search.value));ui.refresh.addEventListener('click',()=>location.reload());renderLibrary();
 
-  if (!state.drawingStart) {
-    state.drawingStart=world;
-  } else {
-    const length=Math.hypot(world.x-state.drawingStart.x,world.y-state.drawingStart.y);
-    if (length>=state.grid/2) {
-      state.walls.push({
-        id: crypto.randomUUID(),
-        a:{...state.drawingStart}, b:{...world},
-        height:state.defaultHeight, thickness:state.defaultThickness
-      });
-      state.drawingStart=world;
-      syncScene();
-    }
-  }
-});
-
-planCanvas.addEventListener('pointermove', e => {
-  const pos=pointerPosition(e);
-  if (state.isPanning && state.lastMouse) {
-    state.pan.x+=pos.x-state.lastMouse.x; state.pan.y+=pos.y-state.lastMouse.y; state.lastMouse=pos; return;
-  }
-  state.hoverWorld=snap(screenToWorld(pos.x,pos.y));
-});
-
-planCanvas.addEventListener('pointerup', e => { state.isPanning=false; state.lastMouse=null; try{planCanvas.releasePointerCapture(e.pointerId)}catch{} });
-planCanvas.addEventListener('pointerleave',()=>{ if(!state.isPanning) state.hoverWorld=null; });
-planCanvas.addEventListener('wheel', e => {
-  e.preventDefault();
-  const pos=pointerPosition(e);
-  const before=screenToWorld(pos.x,pos.y);
-  const factor=e.deltaY<0?1.12:0.89;
-  state.zoom=Math.max(25,Math.min(220,state.zoom*factor));
-  const after=screenToWorld(pos.x,pos.y);
-  state.pan.x+=(after.x-before.x)*state.zoom;
-  state.pan.y+=(after.y-before.y)*state.zoom;
-},{passive:false});
-
-// ---------- UI ----------
-function setTool(tool) {
-  state.tool=tool;
-  state.drawingStart=null;
-  ui.wallTool.classList.toggle('active',tool==='wall');
-  ui.selectTool.classList.toggle('active',tool==='select');
-  ui.planStatus.textContent=tool==='wall'?'Dibujar paredes':'Seleccionar';
-}
-
-function selectWall(id) {
-  state.selectedId=id;
-  const wall=state.walls.find(w=>w.id===id);
-  ui.emptyInspector.hidden=!!wall;
-  ui.wallInspector.hidden=!wall;
-  if (wall) {
-    ui.wallNumber.textContent=`#${state.walls.indexOf(wall)+1}`;
-    ui.wallLength.textContent=wallLength(wall).toFixed(2);
-    ui.selectedHeight.value=wall.height;
-    ui.selectedThickness.value=wall.thickness;
-  }
-  rebuild3D();
-}
-
-function syncScene() {
-  ui.wallCount.textContent=state.walls.length;
-  if (state.selectedId && !state.walls.some(w=>w.id===state.selectedId)) selectWall(null);
-  rebuild3D();
-}
-
-ui.wallTool.addEventListener('click',()=>setTool('wall'));
-ui.selectTool.addEventListener('click',()=>setTool('select'));
-ui.defaultHeight.addEventListener('input',()=>state.defaultHeight=Number(ui.defaultHeight.value)||2.6);
-ui.wallThickness.addEventListener('input',()=>state.defaultThickness=Number(ui.wallThickness.value)||0.15);
-ui.gridSize.addEventListener('change',()=>state.grid=Number(ui.gridSize.value));
-
-ui.selectedHeight.addEventListener('input',()=>{
-  const w=state.walls.find(w=>w.id===state.selectedId); if(!w)return;
-  w.height=Math.max(.5,Number(ui.selectedHeight.value)||.5); rebuild3D();
-});
-ui.selectedThickness.addEventListener('input',()=>{
-  const w=state.walls.find(w=>w.id===state.selectedId); if(!w)return;
-  w.thickness=Math.max(.05,Number(ui.selectedThickness.value)||.05); rebuild3D();
-});
-ui.deleteWall.addEventListener('click',()=>{
-  state.walls=state.walls.filter(w=>w.id!==state.selectedId); selectWall(null); syncScene();
-});
-
-ui.newPlan.addEventListener('click',()=>{
-  state.walls=[]; state.drawingStart=null; selectWall(null); syncScene();
-});
-
-ui.demo.addEventListener('click',()=>{
-  state.walls=[];
-  const pts=[[-3,-2.2],[3,-2.2],[3,2.2],[-3,2.2],[-3,-2.2]];
-  for(let i=0;i<pts.length-1;i++) state.walls.push({id:crypto.randomUUID(),a:{x:pts[i][0],y:pts[i][1]},b:{x:pts[i+1][0],y:pts[i+1][1]},height:2.6,thickness:.15});
-  state.drawingStart=null; selectWall(null); syncScene();
-  controls.target.set(0,1,0); camera.position.set(7,6,8);
-});
-
-document.addEventListener('keydown',e=>{
-  if (e.target.matches('input,select')) return;
-  if(e.key==='Escape'){state.drawingStart=null;}
-  if(e.key.toLowerCase()==='w')setTool('wall');
-  if(e.key.toLowerCase()==='v')setTool('select');
-  if((e.key==='Delete'||e.key==='Backspace')&&state.selectedId)ui.deleteWall.click();
-});
-
-window.addEventListener('resize',()=>{resizeCanvas();resize3D();});
-state.grid=Number(ui.gridSize.value);
-syncScene();
+// ---------- Inspector/UI ----------
+function setTool(tool){state.tool=tool;state.drawingStart=null;ui.wallTool.classList.toggle('active',tool==='wall');ui.selectTool.classList.toggle('active',tool==='select');ui.planStatus.textContent=tool==='wall'?'Dibujar paredes':'Seleccionar'}
+function selectEntity(sel){state.selected=sel;ui.emptyInspector.hidden=!!sel;ui.wallInspector.hidden=sel?.type!=='wall';ui.objectInspector.hidden=sel?.type!=='object';if(sel?.type==='wall'){const w=state.walls.find(x=>x.id===sel.id);if(w){ui.wallNumber.textContent=`#${state.walls.indexOf(w)+1}`;ui.wallLength.textContent=wallLength(w).toFixed(2);ui.selectedHeight.value=w.height;ui.selectedThickness.value=w.thickness}}if(sel?.type==='object'){const o=state.objects.find(x=>x.id===sel.id),def=catalog[o.defIndex];ui.objectTitle.textContent=def.name;ui.objX.value=o.x.toFixed(2);ui.objZ.value=o.z.toFixed(2);ui.objRot.value=Math.round(THREE.MathUtils.radToDeg(o.rot));ui.objW.value=o.params.w??.5;ui.objH.value=o.params.h??.5;ui.objD.value=o.params.d??.5}rebuild3D()}
+function syncScene(){ui.wallCount.textContent=state.walls.length;ui.objectCount.textContent=state.objects.length+1;rebuild3D()}
+ui.wallTool.onclick=()=>setTool('wall');ui.selectTool.onclick=()=>setTool('select');ui.defaultHeight.oninput=()=>state.defaultHeight=Number(ui.defaultHeight.value)||2.6;ui.wallThickness.oninput=()=>state.defaultThickness=Number(ui.wallThickness.value)||.15;ui.gridSize.onchange=()=>state.grid=Number(ui.gridSize.value);
+ui.selectedHeight.oninput=()=>{const w=state.walls.find(x=>x.id===state.selected?.id);if(w){w.height=Math.max(.5,Number(ui.selectedHeight.value)||.5);rebuild3D()}};ui.selectedThickness.oninput=()=>{const w=state.walls.find(x=>x.id===state.selected?.id);if(w){w.thickness=Math.max(.05,Number(ui.selectedThickness.value)||.05);rebuild3D()}};
+ui.deleteWall.onclick=()=>{state.walls=state.walls.filter(w=>w.id!==state.selected?.id);selectEntity(null);syncScene()};ui.deleteObject.onclick=()=>{state.objects=state.objects.filter(o=>o.id!==state.selected?.id);selectEntity(null);syncScene()};
+function updateObj(){const o=state.objects.find(x=>x.id===state.selected?.id);if(!o)return;o.x=Number(ui.objX.value)||0;o.z=Number(ui.objZ.value)||0;o.rot=THREE.MathUtils.degToRad(Number(ui.objRot.value)||0);o.params.w=Math.max(.02,Number(ui.objW.value)||.02);o.params.h=Math.max(.02,Number(ui.objH.value)||.02);o.params.d=Math.max(.02,Number(ui.objD.value)||.02);rebuild3D()}[ui.objX,ui.objZ,ui.objRot,ui.objW,ui.objH,ui.objD].forEach(el=>el.oninput=updateObj);
+ui.newPlan.onclick=()=>{state.walls=[];state.objects=[];state.drawingStart=null;selectEntity(null);syncScene()};ui.demo.onclick=()=>{state.walls=[];state.objects=[];const pts=[[-3,-2.2],[3,-2.2],[3,2.2],[-3,2.2],[-3,-2.2]];for(let i=0;i<pts.length-1;i++)state.walls.push({id:crypto.randomUUID(),a:{x:pts[i][0],y:pts[i][1]},b:{x:pts[i+1][0],y:pts[i+1][1]},height:2.6,thickness:.15});for(const name of ['Mesa rectangular','Silla simple','Cajonera','Sofá','Candelabro']){const i=catalog.findIndex(d=>d.name===name);if(i>=0)addObject(i)}selectEntity(null);syncScene();controls.target.set(0,1,0);camera.position.set(7,6,8)};
+document.addEventListener('keydown',e=>{if(e.target.matches('input,select'))return;if(e.key==='Escape')state.drawingStart=null;if(e.key.toLowerCase()==='w')setTool('wall');if(e.key.toLowerCase()==='v')setTool('select');if((e.key==='Delete'||e.key==='Backspace')&&state.selected){state.selected.type==='wall'?ui.deleteWall.click():ui.deleteObject.click()}});window.addEventListener('resize',()=>{resizeCanvas();resize3D()});state.grid=Number(ui.gridSize.value);syncScene();
