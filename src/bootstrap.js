@@ -12,22 +12,28 @@ function showFatal(error) {
 try {
   const appUrl = new URL('./app.js', import.meta.url);
   const libraryUrl = new URL('./object-library.js', import.meta.url).href;
-  const response = await fetch(appUrl.href + '?hotfix=042');
+  const response = await fetch(appUrl.href + '?hotfix=043');
   if (!response.ok) throw new Error(`No se pudo cargar app.js (${response.status})`);
   let source = await response.text();
 
-  // Startup hotfixes for v0.4.2.
+  // Startup/compatibility hotfixes for v0.4.3.
   source = source.replaceAll('selected?.38', 'selected ? .38');
 
   // Three.js r168: TransformControls is itself the scene object.
-  // getHelper() only becomes the required API in r169+.
   source = source.replace(
     "const transformHelper = transform.getHelper(); scene.add(transformHelper); transformHelper.visible = false;",
     "const transformHelper = transform; scene.add(transform); transform.visible = false;"
   );
 
+  // ShapeGeometry lives in XY. Negating plan Z before the -90° X rotation maps it
+  // back to world +Z, aligning floor and ceiling exactly with the 2D walls.
+  source = source.replace(
+    'points.forEach((p,i)=> i ? s.lineTo(p.x,p.z) : s.moveTo(p.x,p.z));',
+    'points.forEach((p,i)=> i ? s.lineTo(p.x,-p.z) : s.moveTo(p.x,-p.z));'
+  );
+
   // Report the actual hotfixed build in the UI.
-  source = source.replace("const VERSION = '0.4.1';", "const VERSION = '0.4.2';");
+  source = source.replace("const VERSION = '0.4.1';", "const VERSION = '0.4.3';");
 
   // A Blob module has no repository-relative base URL, so make this import absolute.
   source = source.replace("from './object-library.js'", `from '${libraryUrl}'`);
